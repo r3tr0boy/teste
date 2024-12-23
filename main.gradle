@@ -37,8 +37,7 @@ subprojects {
 allprojects {
     apply plugin: "java"
     apply plugin: "architectury-plugin"
-    apply plugin: "maven-publish"
-
+    
     archivesBaseName = rootProject.archives_base_name
     version = project.minecraft_version + "-" + rootProject.mod_version
     group = rootProject.maven_group
@@ -65,7 +64,21 @@ task cleanAll {
     dependsOn(":neoforge:clean")
 }
 
-task buildToLocal(group: "publishing") {
+task buildToLocal {
     dependsOn cleanAll, buildAll, ":common:publishToMavenLocal", ":fabric:publishToMavenLocal", ":neoforge:publishToMavenLocal"
     buildAll.mustRunAfter cleanAll
 }
+
+afterEvaluate {
+    task buildFabric(group: "publishing") {
+        dependsOn cleanAll, ":fabric:build"
+        project("fabric").build.mustRunAfter cleanAll
+    }
+
+    task buildNeoForge(group: "publishing") {
+        dependsOn cleanAll, ":neoforge:build"
+        project("neoforge").build.mustRunAfter cleanAll
+    }
+}
+
+buildAll.mustRunAfter cleanAll
