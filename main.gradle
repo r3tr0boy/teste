@@ -3,7 +3,12 @@ buildscript {
         mavenCentral()
         gradlePluginPortal()
     }
+    dependencies {
+        classpath group: 'com.diluv.schoomp', name: 'Schoomp', version: '1.1.0+'
+    }
 }
+
+apply from: "https://raw.githubusercontent.com/Flemmli97/GradleScripts/mc-architectury-fabric-neoforge/changelog.gradle"
 
 architectury {
     minecraft = rootProject.minecraft_version
@@ -47,33 +52,16 @@ allprojects {
     }
 }
 
-task buildAll {
+task buildFabric {
     dependsOn(":fabric:build")
-    dependsOn(":neoforge:build")
 }
 
-task cleanAll {
+task cleanFabric {
     dependsOn clean
-    dependsOn(":common:clean")
     dependsOn(":fabric:clean")
-    dependsOn(":neoforge:clean")
 }
 
 task buildToLocal {
-    dependsOn cleanAll, buildAll, ":common:publishToMavenLocal", ":fabric:publishToMavenLocal", ":neoforge:publishToMavenLocal"
-    buildAll.mustRunAfter cleanAll
+    dependsOn cleanFabric, buildFabric, ":fabric:publishToMavenLocal"
+    buildFabric.mustRunAfter cleanFabric
 }
-
-afterEvaluate {
-    task buildFabric(group: "publishing") {
-        dependsOn cleanAll, ":fabric:build"
-        project("fabric").build.mustRunAfter cleanAll
-    }
-
-    task buildNeoForge(group: "publishing") {
-        dependsOn cleanAll, ":neoforge:build"
-        project("neoforge").build.mustRunAfter cleanAll
-    }
-}
-
-buildAll.mustRunAfter cleanAll
