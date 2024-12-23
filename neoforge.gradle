@@ -1,0 +1,109 @@
+ext {
+    shadow_dep = [group: "com.github.johnrengelman", name: "shadow", version: "8.+"]
+}
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath shadow_dep
+    }
+}
+
+apply plugin: com.github.jengelman.gradle.plugins.shadow.ShadowPlugin
+
+architectury {
+    platformSetupLoomIde()
+    neoForge()
+}
+
+loom {
+    runs {
+        client {
+            vmArgs "-Dmixin.debug.export=true"
+        }
+    }
+}
+
+ext {
+    mod_meta = ["version": project.version, "loader_version": neo_loader_version,
+                "mcversion": minecraft_version, "forge_version": neoforge_version]
+}
+
+configurations {
+    common
+    shadowCommon // Não usar shadow da Shadow Plugin para evitar conflitos no IDE.
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentNeoForge.extendsFrom common
+}
+
+repositories {
+    maven { url "https://maven.neoforged.net/releases/" }
+}
+
+dependencies {
+    neoForge "net.neoforged:neoforge:${neoforge_version}"
+    common(project(path: ":common", configuration: "namedElements")) { transitive false }
+    shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive = false }
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    def loader_version = (neoforge_version =~ /([0-9]+)\.([0-9]+)\.([0-9]+)/)[0][1]
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand mod_meta
+    }
+    exclude '.cache'
+}
+
+shadowJar {
+    exclude "fabric.mod.json"
+
+    configurations = [project.configurations.shadowCommon]
+    archiveClassifier.set("dev-shadow")
+}
+
+remapJar {
+    input.set shadowJar.archiveFile
+    dependsOn shadowJar
+    archiveClassifier.set("neoforge")
+}
+
+jar {
+    archiveClassifier.set("dev")
+}
+
+sourcesJar {
+    def commonSources = project(":common").sourcesJar
+    dependsOn commonSources
+    from commonSources.archiveFile.map { zipTree(it) }
+    archiveClassifier.set("neoforge-sources")
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact(remapJar) {
+                classifier null
+                builtBy remapJar
+            }
+            artifact(sourcesJar) {
+                classifier "sources"
+                builtBy sourcesJar
+            }
+            artifactId project.archives_base_name
+            version project.version + "-neoforge"
+        }
+    }
+
+    repositories {
+        mavenLocal() // Publicação local
+    }
+}
+
+tasks.build {
+    dependsOn shadowJar, remapJar
+}
