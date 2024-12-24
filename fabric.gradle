@@ -1,5 +1,5 @@
 ext {
-    shadow_dep = [group: "com.github.johnrengelman", name: "shadow", version: "8.+"]
+    shadow_dep = [group: "com.github.johnrengelman", name: "shadow", version: "8.+"]  // mantém a dependência do Shadow, caso necessário
 }
 
 buildscript {
@@ -9,15 +9,13 @@ buildscript {
     }
     dependencies {
         classpath "gradle.plugin.com.matthewprenger:CurseGradle:1.4.0"
-        classpath project.hasProperty('shadow_dep') ? shadow_dep : ["group": "com.github.johnrengelman", "name": "shadow", "version": "8."]
+        classpath project.hasProperty('shadow_dep') ? shadow_dep : ["group": "com.github.johnrengelman", "name": "shadow", "version": "8.+"]
         classpath "com.modrinth.minotaur:Minotaur:2.+"
     }
 }
 
-apply plugin: com.modrinth.minotaur.Minotaur
 apply plugin: com.github.jengelman.gradle.plugins.shadow.ShadowPlugin
 apply plugin: com.matthewprenger.cursegradle.CurseGradlePlugin
-apply from: "https://raw.githubusercontent.com/Flemmli97/GradleScripts/mc-architectury-fabric-neoforge/changelog.gradle"
 
 architectury {
     platformSetupLoomIde()
@@ -39,7 +37,7 @@ ext {
 
 configurations {
     common
-    shadowCommon // Don't use shadow from the shadow plugin because we don't want IDEA to index this.
+    shadowCommon // Não use o Shadow do plugin do Shadow porque não queremos que o IDEA indexe isso.
     compileClasspath.extendsFrom common
     runtimeClasspath.extendsFrom common
     developmentFabric.extendsFrom common
@@ -67,31 +65,41 @@ shadowJar {
     archiveClassifier.set("dev-shadow")
 }
 
-remapJar {
-    input.set shadowJar.archiveFile
-    dependsOn shadowJar
-    archiveClassifier.set("fabric")
-}
-
 jar {
-    archiveClassifier.set("dev")
+    // Modifiquei a tarefa jar para gerar o JAR localmente
+    archiveBaseName.set(project.name)
+    archiveVersion.set(project.version)
+    archiveClassifier.set("") // Sem classificadores adicionais
+    destinationDirectory.set(file("${buildDir}/libs")) // Coloca o JAR gerado em build/libs
 }
 
-sourcesJar {
-    def commonSources = project(":common").sourcesJar
-    dependsOn commonSources
-    from commonSources.archiveFile.map { zipTree(it) }
-    archiveClassifier.set("fabric-sources")
-}
-
-components.java {
-    withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
-        skip()
+tasks.register("buildJar") {
+    dependsOn jar
+    doLast {
+        println "JAR gerado em: ${buildDir}/libs/${jar.archiveFileName}"
     }
 }
 
-// Removido a configuração de publicação no CurseForge, Modrinth e Maven
+tasks.getByName("curseforge").mustRunAfter build
+tasks.getByName("modrinth").mustRunAfter build
 
-// Não há necessidade de tarefas específicas para "curseforge" e "modrinth" já que não estamos publicando
-// tasks.getByName("curseforge").mustRunAfter build
-// tasks.getByName("modrinth").mustRunAfter build
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact(jar) {
+                classifier null
+                builtBy jar
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            url "https://gitlab.com/api/v4/projects/21830712/packages/maven"
+            credentials {
+                username = project.findProperty("gpr.user") ?: System.getenv("GPR_USER")
+                password = project.findProperty("gpr.gitlab.token") ?: System.getenv("GPR_GITLAB_TOKEN")
+            }
+        }
+    }
+}
